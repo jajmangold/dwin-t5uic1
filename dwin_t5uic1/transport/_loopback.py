@@ -33,7 +33,7 @@ class LoopbackTransport:
 
     def read(self, size):
         data = bytes(self._inbound[:size])
-        del self._inbound[:size]
+        self._inbound[:] = self._inbound[size:]   # MicroPython: no del on bytearray
         return data
 
     def write(self, data):
@@ -77,5 +77,5 @@ class LoopbackTransport:
         return result
 
     def clear(self):
-        del self.written[:]
+        self.written[:] = b''
         del self.frames[:]

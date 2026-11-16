@@ -146,6 +146,50 @@ def test_driver_avoids_cpython_only_builtins():
     print('driver: no CPython-only facilities used directly')
 
 
+def test_no_bytearray_mutation_cpython_only():
+    """MicroPython's bytearray has no item/slice deletion and no .clear().
+
+    Both are silently fine on CPython and raise at runtime on a Pico, which
+    had made every RX path in protocol.py dead on-device while this whole
+    suite stayed green. Measured on a Waveshare RP2040-Zero, MicroPython
+    1.29.0:
+
+        del b[0]      -> TypeError: doesn't support item deletion
+        del b[:2]     -> TypeError: doesn't support item deletion
+        b.clear()     -> AttributeError: no attribute 'clear'
+        b[:] = b[2:]  -> OK      <- trim with this
+        b[:] = b''    -> OK      <- empty with this
+
+    Lists are fine on both runtimes; this is a bytearray-only trap, so the
+    check is limited to the names in the package that hold bytearrays.
+    """
+    import re
+
+    buffers = ('buffer', '_inbound', 'written', '_rx')
+    del_pattern = re.compile(
+        r'\bdel\s+(?:self\.)?(?:%s)\s*\[' % '|'.join(buffers))
+    clear_pattern = re.compile(
+        r'\b(?:self\.)?(?:%s)\.clear\(\)' % '|'.join(buffers))
+
+    offenders = []
+    for path in sorted(PACKAGE.rglob('*.py')):
+        if path.name == '_compat.py':
+            continue
+        for lineno, line in enumerate(
+                path.read_text(encoding='utf-8').splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith('#'):
+                continue
+            if del_pattern.search(stripped) or clear_pattern.search(stripped):
+                offenders.append(
+                    '%s:%d: %s' % (path.relative_to(ROOT), lineno, stripped))
+
+    assert not offenders, (
+        'bytearray mutation that raises on MicroPython; use slice assignment '
+        'instead:\n' + '\n'.join(offenders))
+    print('portability: no bytearray del/.clear() (MicroPython lacks both)')
+
+
 def test_package_compiles_without_hardware():
     """Importing the package must not pull in pyserial, gpiozero or machine."""
     import importlib

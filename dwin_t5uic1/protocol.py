@@ -33,13 +33,17 @@ def take_response(buffer):
     Mutates the caller-owned bytearray, preserving incomplete frames. Discards
     noise/unknown opcodes and resynchronizes after a malformed trailer.
     """
+    # NOTE: MicroPython's bytearray implements neither item/slice deletion nor
+    # .clear() - only CPython does. Both raise at runtime, so every RX path
+    # here is dead on a Pico unless the buffer is trimmed by slice assignment,
+    # which both runtimes support. Do not "simplify" these back to del.
     while True:
         start = buffer.find(HEADER)
         if start < 0:
-            buffer.clear()
+            buffer[:] = b''
             return None
         if start:
-            del buffer[:start]
+            buffer[:] = buffer[start:]
         if len(buffer) < 2:
             return None
         command = buffer[1]
@@ -54,16 +58,16 @@ def take_response(buffer):
         else:
             size = FIXED_RX_PAYLOAD.get(command)
             if size is None:
-                del buffer[0]
+                buffer[:] = buffer[1:]
                 continue
         total = 2 + size + len(TAIL)
         if len(buffer) < total:
             return None
         if buffer[total - len(TAIL):total] != TAIL:
-            del buffer[0]
+            buffer[:] = buffer[1:]
             continue
         payload = bytes(buffer[2:2 + size])
-        del buffer[:total]
+        buffer[:] = buffer[total:]
         return command, payload
 
 
