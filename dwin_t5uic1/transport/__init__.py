@@ -38,8 +38,13 @@ def open_pyserial(port, baudrate=115200, timeout=0.05, write_timeout=1.0):
 def open_uart(uart_id, tx, rx, baudrate=115200, timeout=50, timeout_char=5):
     """Open a panel on a MicroPython ``machine.UART`` (Pico, ESP32).
 
-    ``tx``/``rx`` are GPIO numbers. Wire the Pico's TX to panel pin 3 and the
-    Pico's RX to panel pin 4; panel logic is 3.3 V, so no level shifting.
+    ``tx``/``rx`` are GPIO numbers. Serial crosses over: the host's TX goes to
+    the panel's **RX, pin 8**, and the host's RX comes from the panel's
+    **TX, pin 7**. Panel logic is 3.3 V, so no level shifting is needed.
+
+    Pins 3 and 4 are Encoder A and B, not serial -- see docs/wiring.md for the
+    full map and for why this pinout is mis-documented so widely (the board
+    and panel ends of the ribbon are numbered in opposite directions).
     """
     from machine import UART, Pin
     uart = UART(uart_id, baudrate=baudrate, tx=Pin(tx), rx=Pin(rx),
